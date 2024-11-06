@@ -1,27 +1,30 @@
 <template>
   <div id="app">
-    <Chat />
+    <ChatComponent />
   </div>
 </template>
 
 <script>
-import Chat from './components/Chat.vue';
+import ChatComponent from './components/ChatComponent.vue'
 
 export default {
   name: 'App',
   components: {
-    Chat
+    ChatComponent
   }
-};
+}
 </script>
 
 <style>
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #f5f5f7;
+}
+
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
   color: #2c3e50;
-  margin-top: 60px;
 }
 </style>
