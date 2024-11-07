@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: bitnami/postgresql:14.13.0-debian-12-r17
+    container_name: postgres
+    environment:
+      POSTGRES_PASSWORD: mysecretpassword
+    volumes:
+      - /Users/loloru/vscodeProjects/chat-client/client/pgsql/data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
