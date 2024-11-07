@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Chat Interface with Avatars</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f5f5f7;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar,
+        .history-sidebar {
+            width: 250px;
+            background-color: #ffffff;
+            padding: 20px;
+        }
+
+        .chat-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background-color: #ffffff;
+            border-bottom: 1px solid #e1e1e6;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            padding: 20px;
+            background-color: #f9f9fb;
+            overflow-y: auto;
+        }
+
+        .chat-footer {
+            background-color: #ffffff;
+            border-top: 1px solid #e1e1e6;
+            padding: 10px 20px;
+            display: flex;
+        }
+
+        .chat-input {
+            flex-grow: 1;
+            border: 1px solid #e1e1e6;
+            border-radius: 15px;
+            padding: 10px;
+            margin-right: 10px;
+        }
+
+        .chat-input:focus {
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+            outline: none;
+        }
+
+        .send-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+        .send-button:hover {
+            background-color: #0056b3;
+        }
+
+        .list-header {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .list-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #e1e1e6;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+        .list-item:hover {
+            background-color: #f5f5f7;
+            border-color: #007bff;
+        }
+
+        .avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background-color: #e1e1e6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar,
+            .history-sidebar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="list-header">Characters List</div>
+            <ul class="list characters-list">
+                <li class="list-item">
+                    <div class="avatar">JD</div>John Doe
+                </li>
+                <li class="list-item">
+                    <div class="avatar">JS</div>Jane Smith
+                </li>
+                <li class="list-item">
+                    <div class="avatar">CB</div>Chris Brown
+                </li>
+            </ul>
+        </div>
+        <div class="chat-area">
+            <div class="chat-header">Chat Topic: General Discussion</div>
+            <div class="chat-messages">
+                <!-- Chat Messages Go Here -->
+            </div>
+            <div class="chat-footer">
+                <input type="text" class="chat-input" placeholder="Type a message...">
+                <button class="send-button">Send</button>
+            </div>
+        </div>
+        <div class="history-sidebar">
+            <div class="list-header">Historical Chat Topics</div>
+            <ul class="list history-list">
+                <li class="list-item">Topic 1</li>
+                <li class="list-item">Topic 2</li>
+                <li class="list-item">Topic 3</li>
+                <li class="list-item">Topic 4</li>
+            </ul>
+        </div>
+    </div>
+</body>
+
+</html>
