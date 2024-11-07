@@ -3,10 +3,20 @@
     <CharactersList 
       @select-character="handleCharacterSelect" 
       @add-to-chat="handleAddToChat"
+      @show-dialog="handleShowDialog"
       :currentSessionId="currentSessionId"
     />
     <ChatArea ref="chatArea" :sessionId="currentSessionId" />
     <HistorySidebar @select-session="handleSessionSelect" />
+
+    <!-- 添加 EditCharacterDialog 组件 -->
+    <EditCharacterDialog
+      :visible="showDialog"
+      :character="selectedCharacter"
+      :is-new="!selectedCharacter?.id"
+      @close="handleCloseDialog"
+      @save="handleSaveCharacter"
+    />
   </div>
 </template>
 
@@ -14,6 +24,7 @@
 import CharactersList from './CharactersList.vue'
 import ChatArea from './ChatArea.vue'
 import HistorySidebar from './HistorySidebar.vue'
+import EditCharacterDialog from './EditCharacterDialog.vue'
 import { API_ROUTES } from '../config/api'
 
 export default {
@@ -21,11 +32,14 @@ export default {
   components: {
     CharactersList,
     ChatArea,
-    HistorySidebar
+    HistorySidebar,
+    EditCharacterDialog
   },
   data() {
     return {
-      currentSessionId: 1 // 默认会话ID
+      currentSessionId: 1, // 默认会话ID
+      showDialog: false,
+      selectedCharacter: null
     }
   },
   methods: {
@@ -53,6 +67,41 @@ export default {
         }
       } catch (error) {
         alert('添加失败: ' + error.message)
+      }
+    },
+    // 新增的方法
+    handleShowDialog(character) {
+      this.selectedCharacter = character
+      this.showDialog = true
+    },
+    handleCloseDialog() {
+      this.showDialog = false
+      this.selectedCharacter = null
+    },
+    async handleSaveCharacter(character) {
+      try {
+        const url = character.id 
+          ? `${API_ROUTES.CONFIG}/${character.id}`
+          : API_ROUTES.CONFIG
+        const method = character.id ? 'PATCH' : 'POST'
+        
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(character)
+        })
+        
+        if (response.ok) {
+          // 刷新角色列表
+          this.$refs.charactersList.fetchCharacters()
+          this.handleCloseDialog()
+        } else {
+          throw new Error('保存失败')
+        }
+      } catch (error) {
+        alert('保存失败: ' + error.message)
       }
     }
   }

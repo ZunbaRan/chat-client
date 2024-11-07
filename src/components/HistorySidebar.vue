@@ -82,10 +82,12 @@ export default {
 
 <style scoped>
 .history-sidebar {
-  width: 290px; /* 调整宽度与 CharactersList 一致 */
+  width: 290px; /* 固定宽度 */
   background-color: #ffffff;
   padding: 20px;
   box-sizing: border-box;
+  overflow-y: auto; /* 允许垂直滚动 */
+  height: 100%; /* 使其高度与父容器一致 */
 }
 
 .list-header {
@@ -113,10 +115,6 @@ export default {
 
 .add-button:hover {
   background-color: #218838;
-}
-
-.btn-icon {
-  font-size: 16px;
 }
 
 .list {

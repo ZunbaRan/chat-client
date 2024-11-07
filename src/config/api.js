@@ -1,4 +1,5 @@
-export const API_BASE_URL = 'http://192.168.110.99:3000'
+// export const API_BASE_URL = 'http://192.168.110.99:3000'
+export const API_BASE_URL = 'http://127.0.0.1:3000'
 
 export const API_ROUTES = {
   CREATE_SESSION_LIST: `${API_BASE_URL}/chat/sessions`,
@@ -9,5 +10,6 @@ export const API_ROUTES = {
   SEND_MESSAGE: (sessionId) => 
     `${API_BASE_URL}/chat/${sessionId}/message`,
   CREATE_SESSION: `${API_BASE_URL}/chat/session`,
-  UPDATE_SESSION: (sessionId) => `${API_BASE_URL}/chat/session/${sessionId}`
+  UPDATE_SESSION: (sessionId) => `${API_BASE_URL}/chat/session/${sessionId}`,
+  TEST_CHARACTER: (profileId) => `${API_BASE_URL}/config/chat/${profileId}`
 }

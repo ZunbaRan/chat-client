@@ -2,7 +2,7 @@
   <div class="sidebar">
     <div class="list-header">
       <span>Characters List</span>
-      <button class="add-button" @click="handleAdd">
+      <button class="add-button" @click="$emit('show-dialog', {})">
         <i class="fas fa-plus"></i> Add New
       </button>
     </div>
@@ -42,32 +42,17 @@
         </div>
       </li>
     </ul>
-
-    <EditCharacterDialog
-      :visible="showDialog"
-      :character="selectedCharacter"
-      :is-new="isNewCharacter"
-      @close="showDialog = false"
-      @save="handleSave"
-    />
   </div>
 </template>
 
 <script>
 import { API_ROUTES } from '../config/api'
-import EditCharacterDialog from './EditCharacterDialog.vue'
 
 export default {
   name: 'CharactersList',
-  components: {
-    EditCharacterDialog
-  },
   data() {
     return {
       characters: [],
-      showDialog: false,
-      selectedCharacter: null,
-      isNewCharacter: false,
       activeCharacter: null,
       menuPosition: {
         top: '0px',
@@ -100,15 +85,8 @@ export default {
         console.error('Failed to fetch characters:', error)
       }
     },
-    handleAdd() {
-      this.selectedCharacter = {}
-      this.isNewCharacter = true
-      this.showDialog = true
-    },
     handleEdit(character) {
-      this.selectedCharacter = { ...character }
-      this.isNewCharacter = false
-      this.showDialog = true
+      this.$emit('show-dialog', character)
     },
     async handleDelete(character) {
       if (confirm('Are you sure you want to delete this character?')) {
@@ -120,27 +98,6 @@ export default {
         } catch (error) {
           console.error('Failed to delete character:', error)
         }
-      }
-    },
-    async handleSave(formData) {
-      try {
-        const method = this.isNewCharacter ? 'POST' : 'PATCH'
-        const url = this.isNewCharacter 
-          ? API_ROUTES.CONFIG 
-          : `${API_ROUTES.CONFIG}/${formData.id}`
-
-        await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(formData)
-        })
-
-        await this.fetchCharacters()
-        this.showDialog = false
-      } catch (error) {
-        console.error('Failed to save character:', error)
       }
     },
     handleItemClick(character, event) {
