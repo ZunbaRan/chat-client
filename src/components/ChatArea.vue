@@ -1,16 +1,47 @@
 <template>
   <div class="chat-area">
-    <div class="chat-header">Chat Topic: {{ session.topic || 'Loading...' }}</div>
+    <div class="chat-header">
+      <div class="header-title">{{ session.topic || 'Loading...' }}</div>
+      <div class="ai-profiles" v-if="session.aiProfiles && session.aiProfiles.length">
+        <div v-for="ai in aiProfilesWithDetails" 
+             :key="ai.id" 
+             class="ai-profile"
+             :title="ai.name">
+          <div class="avatar" v-if="ai.avatar">
+            <img :src="ai.avatar" :alt="ai.name">
+          </div>
+          <div class="avatar" v-else>
+            {{ getInitials(ai.name) }}
+          </div>
+          <span class="ai-name">{{ ai.name }}</span>
+        </div>
+      </div>
+    </div>
     <div class="chat-messages">
       <div v-for="message in session.messages" 
            :key="message.id"
            class="message-item"
-           :class="{ 'ai-message': message.aiName }">
+           :class="{ 'ai-message': message.type === 'ai', 'user-message': message.type !== 'ai' }">
         <div class="message-header">
-          <span class="message-sender">{{ message.aiName || 'User' }}</span>
+          <span class="message-sender">
+            {{ message.type === 'ai' ? getAiName(message.aiId) : 'User' }}
+          </span>
           <span class="message-time">{{ formatTime(message.createdAt) }}</span>
         </div>
         <div class="message-content">{{ message.content }}</div>
+        <div class="message-avatar" v-if="message.type === 'ai'">
+          <div class="avatar" v-if="getAiAvatar(message.aiId)">
+            <img :src="getAiAvatar(message.aiId)" :alt="getAiName(message.aiId)">
+          </div>
+          <div class="avatar" v-else>
+            {{ getInitials(getAiName(message.aiId)) }}
+          </div>
+        </div>
+        <div class="message-avatar user-avatar" v-else>
+          <div class="avatar">
+            <span>U</span>
+          </div>
+        </div>
       </div>
     </div>
     <div class="chat-footer">
@@ -31,22 +62,65 @@ import { API_ROUTES } from '../config/api'
 
 export default {
   name: 'ChatArea',
+  props: {
+    sessionId: {
+      type: Number,
+      required: true
+    }
+  },
   data() {
     return {
       session: {
         topic: '',
-        messages: []
+        messages: [],
+        aiProfiles: []
       },
       message: '',
-      currentSessionId: 1 // 默认会话ID
+      charactersList: [],
+      autoReplyConfig: {
+        maxRepliesPerAI: 3,
+        maxTotalReplies: 10
+      },
+      aiReplyCount: {}, // 记录每个AI的回复次数
+      totalReplyCount: 0, // 记录总回复次数
+      isAutoReplying: false, // 标记是否正在自动回复
+      isFirstMessage: true // 添加标记是否是第一条消息
+    }
+  },
+  computed: {
+    aiProfilesWithDetails() {
+      return this.session.aiProfiles.map(profile => {
+        const fullProfile = this.charactersList.find(char => char.id === profile.id)
+        return {
+          ...profile,
+          avatar: fullProfile?.avatar || null
+        }
+      })
+    }
+  },
+  watch: {
+    sessionId: {
+      handler: 'fetchChatSession',
+      immediate: true
     }
   },
   methods: {
+    async fetchCharactersList() {
+      try {
+        const response = await fetch(API_ROUTES.CONFIG)
+        const data = await response.json()
+        this.charactersList = data
+      } catch (error) {
+        console.error('Failed to fetch characters:', error)
+      }
+    },
     async fetchChatSession() {
       try {
-        const response = await fetch(API_ROUTES.CHAT_SESSION(this.currentSessionId))
+        const response = await fetch(API_ROUTES.CHAT_SESSION(this.sessionId))
         const data = await response.json()
         this.session = data
+        this.resetCounters()
+        this.isFirstMessage = !data.messages || data.messages.length === 0
       } catch (error) {
         console.error('Failed to fetch chat session:', error)
       }
@@ -54,33 +128,214 @@ export default {
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString()
     },
-    sendMessage() {
-      if (this.message.trim()) {
-        // 这里可以添加发送消息到后端的逻辑
-        console.log('Sending message:', this.message)
-        this.message = ''
+    getInitials(name) {
+      return name
+        .split(' ')
+        .map(word => word[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    },
+    async sendMessage() {
+      if (!this.message.trim()) return
+
+      try {
+        const response = await fetch(API_ROUTES.SEND_MESSAGE(this.sessionId), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: this.message
+          })
+        })
+
+        const data = await response.json()
+        
+        if (data.id) {
+          if (this.isFirstMessage) {
+            await this.updateSessionTopic(this.message)
+            this.isFirstMessage = false
+          }
+
+          this.addMessageToList(data)
+          this.message = ''
+          this.scrollToBottom()
+          
+          this.startAutoReply()
+        }
+      } catch (error) {
+        console.error('Failed to send message:', error)
+        alert('发送消息失败，请重试')
+      }
+    },
+    addMessageToList(message) {
+      if (!this.session.messages) {
+        this.session.messages = []
+      }
+      this.session.messages.push(message)
+    },
+    scrollToBottom() {
+      this.$nextTick(() => {
+        const messagesContainer = this.$el.querySelector('.chat-messages')
+        messagesContainer.scrollTop = messagesContainer.scrollHeight
+      })
+    },
+    async startAutoReply() {
+      if (this.isAutoReplying) return
+      this.isAutoReplying = true
+
+      while (this.canContinueAutoReply()) {
+        await this.sendAIReply()
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
+      }
+
+      this.isAutoReplying = false
+    },
+    canContinueAutoReply() {
+      return this.totalReplyCount < this.autoReplyConfig.maxTotalReplies &&
+             this.session.aiProfiles &&
+             this.session.aiProfiles.length > 0
+    },
+    selectNextAI() {
+      const availableAIs = this.session.aiProfiles.filter(ai => 
+        (this.aiReplyCount[ai.id] || 0) < this.autoReplyConfig.maxRepliesPerAI
+      )
+
+      if (availableAIs.length === 0) return null
+
+      const randomIndex = Math.floor(Math.random() * availableAIs.length)
+      return availableAIs[randomIndex]
+    },
+    async sendAIReply() {
+      const nextAI = this.selectNextAI()
+      if (!nextAI) return false
+
+      try {
+        const response = await fetch(API_ROUTES.SEND_MESSAGE(this.sessionId), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            profileId: nextAI.id
+          })
+        })
+
+        const data = await response.json()
+        
+        if (data.id) {
+          this.aiReplyCount[nextAI.id] = (this.aiReplyCount[nextAI.id] || 0) + 1
+          this.totalReplyCount++
+          
+          this.addMessageToList(data)
+          this.scrollToBottom()
+          
+          return true
+        }
+      } catch (error) {
+        console.error('AI reply failed:', error)
+        return false
+      }
+    },
+    resetCounters() {
+      this.aiReplyCount = {}
+      this.totalReplyCount = 0
+      this.isAutoReplying = false
+    },
+    getAiAvatar(aiId) {
+      const character = this.charactersList.find(char => char.id === aiId)
+      return character?.avatar || null
+    },
+    getAiName(aiId) {
+      const character = this.charactersList.find(char => char.id === aiId)
+      return character?.name || 'Unknown AI'
+    },
+    async updateSessionTopic(message) {
+      try {
+        const newTopic = message.slice(0, 8) + (message.length > 8 ? '...' : '')
+        
+        await fetch(API_ROUTES.UPDATE_SESSION(this.sessionId), {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            topic: newTopic
+          })
+        })
+
+        this.session.topic = newTopic
+      } catch (error) {
+        console.error('Failed to update session topic:', error)
       }
     }
   },
   created() {
-    this.fetchChatSession()
+    this.fetchCharactersList()
   }
 }
 </script>
 
 <style scoped>
-.chat-area {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-}
-
 .chat-header {
   background-color: #ffffff;
   border-bottom: 1px solid #e1e1e6;
   padding: 10px 20px;
+}
+
+.header-title {
   font-size: 18px;
   font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.ai-profiles {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 5px 0;
+}
+
+.ai-profile {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background-color: #f8f9fa;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #e1e1e6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.ai-name {
+  font-size: 14px;
+  color: #666;
+}
+
+.chat-area {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-messages {
@@ -88,26 +343,37 @@ export default {
   padding: 20px;
   background-color: #f9f9fb;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .message-item {
-  margin-bottom: 15px;
-  padding: 10px;
-  border-radius: 8px;
+  position: relative;
+  padding: 12px;
+  border-radius: 12px;
+  max-width: 70%;
   background-color: #fff;
-  max-width: 80%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.ai-message {
+.user-message {
   margin-left: auto;
   background-color: #007bff;
   color: white;
+  padding-right: 40px; /* 为头像留出空间 */
+}
+
+.ai-message {
+  margin-right: auto;
+  background-color: #ffffff;
+  padding-left: 40px; /* 为头像留出空间 */
 }
 
 .message-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-size: 0.9em;
 }
 
@@ -116,15 +382,60 @@ export default {
 }
 
 .message-time {
-  color: #666;
+  font-size: 0.8em;
+  opacity: 0.8;
 }
 
-.ai-message .message-time {
-  color: #e1e1e6;
+.user-message .message-time {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .message-content {
   word-break: break-word;
+  line-height: 1.4;
+}
+
+.message-avatar {
+  position: absolute;
+  bottom: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.ai-message .message-avatar {
+  left: -16px;
+  bottom: -5px;
+}
+
+.user-message .message-avatar {
+  right: -16px;
+  bottom: -5px;
+}
+
+.message-avatar .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #e1e1e6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: bold;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.message-avatar .avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-avatar .avatar {
+  background-color: #28a745;
 }
 
 .chat-footer {
@@ -158,5 +469,11 @@ export default {
 
 .send-button:hover {
   background-color: #0056b3;
+}
+
+@media (max-width: 768px) {
+  .message-item {
+    max-width: 85%;
+  }
 }
 </style> 
