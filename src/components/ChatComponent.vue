@@ -1,6 +1,7 @@
 <template>
   <div class="container">
     <CharactersList 
+      ref="charactersList"
       @select-character="handleCharacterSelect" 
       @add-to-chat="handleAddToChat"
       @show-dialog="handleShowDialog"
@@ -9,7 +10,6 @@
     <ChatArea ref="chatArea" :sessionId="currentSessionId" />
     <HistorySidebar @select-session="handleSessionSelect" />
 
-    <!-- 添加 EditCharacterDialog 组件 -->
     <EditCharacterDialog
       :visible="showDialog"
       :character="selectedCharacter"
@@ -37,7 +37,7 @@ export default {
   },
   data() {
     return {
-      currentSessionId: 1, // 默认会话ID
+      currentSessionId: 1,
       showDialog: false,
       selectedCharacter: null
     }
@@ -60,7 +60,6 @@ export default {
         
         if (data.code === 200) {
           alert('已添加此角色到聊天')
-          // 刷新聊天内容
           this.$refs.chatArea.fetchChatSession()
         } else {
           throw new Error(data.message || '添加失败')
@@ -69,7 +68,6 @@ export default {
         alert('添加失败: ' + error.message)
       }
     },
-    // 新增的方法
     handleShowDialog(character) {
       this.selectedCharacter = character
       this.showDialog = true
@@ -94,8 +92,7 @@ export default {
         })
         
         if (response.ok) {
-          // 刷新角色列表
-          this.$refs.charactersList.fetchCharacters()
+          await this.$refs.charactersList.fetchCharacters()
           this.handleCloseDialog()
         } else {
           throw new Error('保存失败')

@@ -6,7 +6,7 @@
         <div v-for="ai in aiProfilesWithDetails" 
              :key="ai.id" 
              class="ai-profile"
-             :title="ai.name">
+             :title="`${ai.name} (${ai.businessType === 'question' ? '提问者' : '回答者'})`">
           <div class="avatar" v-if="ai.avatar">
             <img :src="ai.avatar" :alt="ai.name">
           </div>
@@ -14,7 +14,13 @@
             {{ getInitials(ai.name) }}
           </div>
           <span class="ai-name">{{ ai.name }}</span>
+          <span class="ai-type-badge" :class="ai.businessType">
+            {{ ai.businessType === 'question' ? 'Q' : 'A' }}
+          </span>
         </div>
+      </div>
+      <div v-if="!canStartChat" class="chat-warning">
+        ⚠️ 需要至少一个提问者和一个回答者才能开始对话
       </div>
     </div>
     <div class="chat-messages">
@@ -50,9 +56,14 @@
         type="text" 
         class="chat-input" 
         placeholder="Type a message..."
-        @keyup.enter="sendMessage"
+        @keyup.enter="handleSendMessage"
+        :disabled="!canStartChat"
       >
-      <button class="send-button" @click="sendMessage">Send</button>
+      <button 
+        class="send-button" 
+        @click="handleSendMessage"
+        :disabled="!canStartChat"
+      >Send</button>
     </div>
   </div>
 </template>
@@ -84,7 +95,9 @@ export default {
       aiReplyCount: {}, // 记录每个AI的回复次数
       totalReplyCount: 0, // 记录总回复次数
       isAutoReplying: false, // 标记是否正在自动回复
-      isFirstMessage: true // 添加标记是否是第一条消息
+      isFirstMessage: true, // 添加标记是否是第一条消息
+      aiReplyQueue: [], // 存储AI回复顺序队列
+      isProcessingQueue: false
     }
   },
   computed: {
@@ -93,9 +106,15 @@ export default {
         const fullProfile = this.charactersList.find(char => char.id === profile.id)
         return {
           ...profile,
-          avatar: fullProfile?.avatar || null
+          avatar: fullProfile?.avatar || null,
+          businessType: fullProfile?.businessType || 'replay'
         }
       })
+    },
+    canStartChat() {
+      const hasQuestioner = this.aiProfilesWithDetails.some(ai => ai.businessType === 'question')
+      const hasResponder = this.aiProfilesWithDetails.some(ai => ai.businessType === 'replay')
+      return hasQuestioner && hasResponder
     }
   },
   watch: {
@@ -162,7 +181,7 @@ export default {
           this.message = ''
           this.scrollToBottom()
           
-          this.startAutoReply()
+          await this.generateAndProcessAIOrder()
         }
       } catch (error) {
         console.error('Failed to send message:', error)
@@ -181,36 +200,39 @@ export default {
         messagesContainer.scrollTop = messagesContainer.scrollHeight
       })
     },
-    async startAutoReply() {
-      if (this.isAutoReplying) return
-      this.isAutoReplying = true
+    async generateAndProcessAIOrder() {
+      if (this.isProcessingQueue) return
 
-      while (this.canContinueAutoReply()) {
-        await this.sendAIReply()
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
+      try {
+        const response = await fetch(API_ROUTES.GENERATE_AI_ORDER(this.sessionId), {
+            method: 'POST',
+        })
+        const result = await response.json()
+
+        if (result.code === 200 && Array.isArray(result.data)) {
+          this.aiReplyQueue = [...result.data] // 保存AI回复顺序队列
+          await this.processAIReplyQueue()
+        }
+      } catch (error) {
+        console.error('Failed to generate AI order:', error)
       }
-
-      this.isAutoReplying = false
     },
-    canContinueAutoReply() {
-      return this.totalReplyCount < this.autoReplyConfig.maxTotalReplies &&
-             this.session.aiProfiles &&
-             this.session.aiProfiles.length > 0
+    async processAIReplyQueue() {
+      if (this.isProcessingQueue) return
+      this.isProcessingQueue = true
+
+      try {
+        while (this.aiReplyQueue.length > 0) {
+          const nextAiId = this.aiReplyQueue.shift() // 获取队列中的下一个AI ID
+          await this.sendAIReply(nextAiId)
+          // 添加随机延迟，使对话更自然
+          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
+        }
+      } finally {
+        this.isProcessingQueue = false
+      }
     },
-    selectNextAI() {
-      const availableAIs = this.session.aiProfiles.filter(ai => 
-        (this.aiReplyCount[ai.id] || 0) < this.autoReplyConfig.maxRepliesPerAI
-      )
-
-      if (availableAIs.length === 0) return null
-
-      const randomIndex = Math.floor(Math.random() * availableAIs.length)
-      return availableAIs[randomIndex]
-    },
-    async sendAIReply() {
-      const nextAI = this.selectNextAI()
-      if (!nextAI) return false
-
+    async sendAIReply(aiId) {
       try {
         const response = await fetch(API_ROUTES.SEND_MESSAGE(this.sessionId), {
           method: 'POST',
@@ -218,19 +240,15 @@ export default {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            profileId: nextAI.id
+            profileId: aiId
           })
         })
 
         const data = await response.json()
         
         if (data.id) {
-          this.aiReplyCount[nextAI.id] = (this.aiReplyCount[nextAI.id] || 0) + 1
-          this.totalReplyCount++
-          
           this.addMessageToList(data)
           this.scrollToBottom()
-          
           return true
         }
       } catch (error) {
@@ -269,6 +287,13 @@ export default {
       } catch (error) {
         console.error('Failed to update session topic:', error)
       }
+    },
+    handleSendMessage() {
+      if (!this.canStartChat) {
+        alert('请确保聊天中至少有一个提问者和一个回答者')
+        return
+      }
+      this.sendMessage()
     }
   },
   created() {
@@ -298,6 +323,7 @@ export default {
 }
 
 .ai-profile {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -333,9 +359,11 @@ export default {
 }
 
 .chat-area {
-  flex-grow: 1;
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chat-messages {
@@ -346,28 +374,34 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .message-item {
   position: relative;
   padding: 12px;
   border-radius: 12px;
-  max-width: 70%;
+  max-width: 60%;
+  min-width: 150px;
   background-color: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .user-message {
   margin-left: auto;
   background-color: #007bff;
   color: white;
-  padding-right: 40px; /* 为头像留出空间 */
+  padding-right: 40px;
 }
 
 .ai-message {
   margin-right: auto;
   background-color: #ffffff;
-  padding-left: 40px; /* 为头像留出空间 */
+  padding-left: 40px;
 }
 
 .message-header {
@@ -471,9 +505,63 @@ export default {
   background-color: #0056b3;
 }
 
-@media (max-width: 768px) {
+.ai-type-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: white;
+}
+
+.ai-type-badge.question {
+  background-color: #17a2b8; /* 提问者使用蓝色 */
+}
+
+.ai-type-badge.replay {
+  background-color: #28a745; /* 回答者使用绿色 */
+}
+
+.chat-warning {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #fff3cd;
+  color: #856404;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.chat-input:disabled,
+.send-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .chat-messages {
+    max-width: 700px;
+  }
+
   .message-item {
-    max-width: 85%;
+    max-width: 70%;
+  }
+}
+
+@media (max-width: 768px) {
+  .chat-messages {
+    max-width: 100%;
+    padding: 10px;
+  }
+
+  .message-item {
+    max-width: 80%;
   }
 }
 </style> 

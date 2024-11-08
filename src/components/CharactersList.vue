@@ -6,42 +6,49 @@
         <i class="fas fa-plus"></i> Add New
       </button>
     </div>
-    <ul class="list characters-list">
-      <li v-for="character in characters" 
-          :key="character.id" 
-          class="list-item"
-          :class="{ 'active': activeCharacter === character.id }"
-          @click="handleItemClick(character, $event)">
-        <div class="character-info">
-          <div class="avatar" v-if="character.avatar">
-            <img :src="character.avatar" alt="avatar">
+    <div class="characters-container">
+      <ul class="list characters-list">
+        <li v-for="character in characters" 
+            :key="character.id" 
+            class="list-item"
+            :class="{ 'active': activeCharacter === character.id }"
+            @click="handleItemClick(character, $event)">
+          <div class="character-info">
+            <div class="avatar" v-if="character.avatar">
+              <img :src="character.avatar" alt="avatar">
+            </div>
+            <div class="avatar" v-else>
+              {{ getInitials(character.name) }}
+            </div>
+            <span class="name">{{ character.name }}</span>
+            <span class="ai-type-badge" :class="character.businessType">
+              {{ character.businessType === 'question' ? 'Q' : 'A' }}
+            </span>
           </div>
-          <div class="avatar" v-else>
-            {{ getInitials(character.name) }}
-          </div>
-          <span class="name">{{ character.name }}</span>
-        </div>
 
-        <!-- 悬浮菜单 -->
-        <div v-if="activeCharacter === character.id" 
-             class="floating-menu"
-             :style="menuPosition">
-          <div class="menu-arrow"></div>
-          <button class="menu-btn edit" @click.stop="handleEdit(character)">
-            <span class="btn-icon">✏️</span>
-            <span class="btn-text">Edit</span>
-          </button>
-          <button class="menu-btn delete" @click.stop="handleDelete(character)">
-            <span class="btn-icon">🗑️</span>
-            <span class="btn-text">Delete</span>
-          </button>
-          <button class="menu-btn add-chat" @click.stop="addToChat(character)">
-            <span class="btn-icon">💬</span>
-            <span class="btn-text">Add to Chat</span>
-          </button>
-        </div>
-      </li>
-    </ul>
+          <!-- 悬浮菜单 -->
+          <div v-if="activeCharacter" 
+               class="floating-menu-container">
+            <div class="floating-menu"
+                 :style="menuPosition">
+              <div class="menu-arrow"></div>
+              <button class="menu-btn edit" @click.stop="handleEdit(getActiveCharacter())">
+                <span class="btn-icon">✏️</span>
+                <span class="btn-text">Edit</span>
+              </button>
+              <button class="menu-btn delete" @click.stop="handleDelete(getActiveCharacter())">
+                <span class="btn-icon">🗑️</span>
+                <span class="btn-text">Delete</span>
+              </button>
+              <button class="menu-btn add-chat" @click.stop="addToChat(getActiveCharacter())">
+                <span class="btn-icon">💬</span>
+                <span class="btn-text">Add to Chat</span>
+              </button>
+            </div>
+          </div>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -111,13 +118,12 @@ export default {
 
       // 获取列表项的位置信息
       const listItem = event.currentTarget
-      const listItemRect = listItem.getBoundingClientRect()
-      console.log(listItemRect)
+      const rect = listItem.getBoundingClientRect()
       
-      // 设置菜单位置，与列表项顶部对齐，并紧贴列表项右侧
+      // 设置菜单位置
       this.menuPosition = {
-        top: '0',
-        left: '100%'
+        top: `${rect.top}px`,
+        left: `${rect.right + 10}px` // 在列表项右侧10px处
       }
       
       this.activeCharacter = character.id
@@ -130,6 +136,10 @@ export default {
     addToChat(character) {
       this.$emit('add-to-chat', character)
       this.closeMenu()
+    },
+
+    getActiveCharacter() {
+      return this.characters.find(c => c.id === this.activeCharacter)
     }
   },
   created() {
@@ -142,36 +152,50 @@ export default {
 .sidebar {
   width: 250px;
   background-color: #ffffff;
-  padding: 20px;
+  height: 100vh; /* 设置整体高度 */
+  display: flex;
+  flex-direction: column;
 }
 
 .list-header {
+  padding: 20px 20px 10px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e1e1e6;
+  flex-shrink: 0; /* 防止头部被压缩 */
 }
 
-.add-button {
-  padding: 8px 12px;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: background-color 0.3s ease;
+.characters-container {
+  flex-grow: 1; /* 占据剩余空间 */
+  overflow-y: auto; /* 启用垂直滚动 */
+  padding: 10px 20px;
 }
 
-.add-button:hover {
-  background: #218838;
+/* 自定义滚动条样式 */
+.characters-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.characters-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.characters-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.characters-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .list {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 .list-item {
@@ -215,11 +239,35 @@ export default {
 }
 
 .character-info {
+  position: relative;
   display: flex;
   align-items: center;
   flex-grow: 1;
   cursor: pointer;
-  padding-right: 10px;
+  padding-right: 25px;
+}
+
+.ai-type-badge {
+  position: absolute;
+  top: -5px;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: white;
+}
+
+.ai-type-badge.question {
+  background-color: #17a2b8;
+}
+
+.ai-type-badge.replay {
+  background-color: #28a745;
 }
 
 .actions {
@@ -272,8 +320,14 @@ export default {
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;
+    height: auto;
+    max-height: 40vh; /* 在移动端限制最大高度 */
   }
-  
+
+  .characters-container {
+    max-height: calc(40vh - 60px); /* 减去header高度 */
+  }
+
   .action-btn .btn-text {
     display: none;
   }
@@ -297,10 +351,18 @@ export default {
   }
 }
 
-.floating-menu {
-  position: absolute;
+.floating-menu-container {
+  position: fixed;
   top: 0;
-  left: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  pointer-events: none; /* 允许点击穿透到底层 */
+}
+
+.floating-menu {
+  position: fixed; /* 改为 fixed 定位 */
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
@@ -308,8 +370,8 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  z-index: 1000;
   min-width: 150px;
+  pointer-events: auto; /* 恢复菜单的点击事件 */
 }
 
 .menu-arrow {
@@ -385,17 +447,17 @@ export default {
 /* 确保菜单按钮在移动端也能正常显示 */
 @media (max-width: 768px) {
   .floating-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    width: auto;
-    margin-top: 5px;
+    position: fixed;
+    top: auto !important;
+    bottom: 20px;
+    left: 50% !important;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 300px;
   }
 
   .menu-arrow {
-    left: 20px;
-    top: -6px;
+    display: none; /* 在移动端隐藏箭头 */
   }
 
   .floating-menu::before {

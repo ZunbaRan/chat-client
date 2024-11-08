@@ -14,10 +14,30 @@
         </div>
 
         <div class="form-group">
+          <label>Type:</label>
+          <select v-model="form.businessType" required class="input-field">
+            <option value="question">提问者（擅长提问）</option>
+            <option value="replay">回答者（擅长回答）</option>
+          </select>
+        </div>
+
+        <div class="form-group">
           <label>Avatar:</label>
           <div class="avatar-upload">
             <img v-if="avatarPreview" :src="avatarPreview" class="avatar-preview" />
-            <input type="file" @change="handleAvatarChange" accept="image/*" />
+            <div class="upload-button-wrapper">
+              <label for="avatar-upload" class="upload-button">
+                <span class="upload-icon">📷</span>
+                <span>Choose Image</span>
+              </label>
+              <input 
+                id="avatar-upload"
+                type="file" 
+                @change="handleAvatarChange" 
+                accept="image/*"
+                class="file-input"
+              />
+            </div>
           </div>
         </div>
 
@@ -39,6 +59,20 @@
         <div class="form-group">
           <label>Model Name:</label>
           <input v-model="form.modelName" type="text" required class="input-field" />
+        </div>
+
+        <div class="form-group">
+          <label>Response Format:</label>
+          <textarea 
+            v-model="responseFormatStr"
+            class="code-textarea"
+            @input="handleResponseFormatChange"
+            placeholder="Enter JSON format"
+            required
+          ></textarea>
+          <div v-if="responseFormatError" class="error-message">
+            {{ responseFormatError }}
+          </div>
         </div>
 
         <div class="dialog-actions">
@@ -88,11 +122,18 @@ export default {
         apiKey: '',
         engineEndpoint: '',
         modelName: '',
-        avatar: null
+        avatar: null,
+        businessType: 'replay',
+        responseFormat: {
+          rule: "$.choices[0].message.content",
+          format: "json"
+        }
       },
+      responseFormatStr: '',
+      responseFormatError: null,
       avatarPreview: null,
       responseContent: null,
-      requestMessage: "哈喽你好啊，测试一下效果，你能给我回复一句话吗" // 默认请求内容
+      requestMessage: "哈喽你好啊，测试一下效果，你能给我回复一句话吗"
     }
   },
   watch: {
@@ -100,8 +141,22 @@ export default {
       immediate: true,
       handler(newVal) {
         if (newVal) {
-          this.form = { ...newVal }
+          this.form = { 
+            ...newVal,
+            businessType: newVal.businessType || 'replay',
+            responseFormat: newVal.responseFormat || {
+              rule: "$.choices[0].message.content",
+              format: "json"
+            }
+          }
+          this.responseFormatStr = JSON.stringify(this.form.responseFormat, null, 2)
           this.avatarPreview = newVal.avatar
+        } else {
+          // 重置为默认值
+          this.responseFormatStr = JSON.stringify({
+            rule: "$.choices[0].message.content",
+            format: "json"
+          }, null, 2)
         }
       }
     }
@@ -118,7 +173,20 @@ export default {
         reader.readAsDataURL(file)
       }
     },
+    handleResponseFormatChange(e) {
+      try {
+        const parsed = JSON.parse(e.target.value)
+        this.form.responseFormat = parsed
+        this.responseFormatError = null
+      } catch (error) {
+        this.responseFormatError = 'Invalid JSON format'
+      }
+    },
     handleSubmit() {
+      if (this.responseFormatError) {
+        alert('Please fix the Response Format JSON error before submitting')
+        return
+      }
       this.$emit('save', this.form)
     },
     async testCharacter() {
@@ -208,7 +276,7 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
 }
 
 .avatar-preview {
@@ -216,6 +284,51 @@ export default {
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 3px solid #fff;
+}
+
+.upload-button-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(to bottom, #ffffff, #f7f7f7);
+  border: 1px solid #dedede;
+  border-radius: 6px;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.upload-button:hover {
+  background: linear-gradient(to bottom, #f7f7f7, #f0f0f0);
+  border-color: #ccc;
+}
+
+.upload-button:active {
+  background: linear-gradient(to bottom, #f0f0f0, #e8e8e8);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.upload-icon {
+  font-size: 16px;
+}
+
+.file-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
 }
 
 .dialog-actions {
@@ -272,5 +385,49 @@ export default {
 
 .chat-message p {
   margin: 5px 0;
+}
+
+/* 添加 select 样式 */
+select.input-field {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 1em;
+  padding-right: 40px;
+}
+
+select.input-field:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+select.input-field option {
+  padding: 10px;
+}
+
+.code-textarea {
+  width: calc(100% - 20px);
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-family: monospace;
+  min-height: 100px;
+  background-color: #f8f9fa;
+  color: #333;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.code-textarea:focus {
+  border-color: #007bff;
+  outline: none;
+  background-color: #fff;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 5px;
 }
 </style> 
