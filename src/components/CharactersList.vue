@@ -2,7 +2,21 @@
   <div class="sidebar">
     <div class="list-header">
       <span>Characters List</span>
-      <button class="add-button" @click="$emit('show-dialog', {})">
+      <div v-if="batchSelectMode" class="batch-select-actions">
+        <label class="select-all-label">
+          <input 
+            type="checkbox" 
+            :checked="isAllSelected"
+            @change="toggleSelectAll"
+          >
+          全选
+        </label>
+        <div class="action-buttons">
+          <button class="confirm-button" @click="confirmBatchAdd">确定</button>
+          <button class="cancel-button" @click="cancelBatchSelect">取消</button>
+        </div>
+      </div>
+      <button v-else class="add-button" @click="$emit('show-dialog', {})">
         <i class="fas fa-plus"></i> Add New
       </button>
     </div>
@@ -11,8 +25,16 @@
         <li v-for="character in characters" 
             :key="character.id" 
             class="list-item"
-            :class="{ 'active': activeCharacter === character.id }"
+            :class="{ 'batch-select-mode': batchSelectMode }"
             @click="handleItemClick(character, $event)">
+          <input 
+            v-if="batchSelectMode"
+            type="checkbox"
+            :checked="selectedCharacters.includes(character.id)"
+            @click.stop
+            @change="toggleSelect(character)"
+            class="batch-select-checkbox"
+          >
           <div class="character-info">
             <div class="avatar" v-if="character.avatar">
               <img :src="character.avatar" alt="avatar">
@@ -22,7 +44,7 @@
             </div>
             <span class="name">{{ character.name }}</span>
             <span class="ai-type-badge" :class="character.businessType">
-              {{ character.businessType === 'question' ? 'Q' : 'A' }}
+              {{ getTypeBadgeText(character.businessType) }}
             </span>
           </div>
 
@@ -35,6 +57,10 @@
               <button class="menu-btn edit" @click.stop="handleEdit(getActiveCharacter())">
                 <span class="btn-icon">✏️</span>
                 <span class="btn-text">Edit</span>
+              </button>
+              <button class="menu-btn copy" @click.stop="handleCopy(getActiveCharacter())">
+                <span class="btn-icon">📋</span>
+                <span class="btn-text">Copy</span>
               </button>
               <button class="menu-btn delete" @click.stop="handleDelete(getActiveCharacter())">
                 <span class="btn-icon">🗑️</span>
@@ -57,6 +83,12 @@ import { API_ROUTES } from '../config/api'
 
 export default {
   name: 'CharactersList',
+  props: {
+    currentSessionId: {
+      type: Number,
+      required: true
+    }
+  },
   data() {
     return {
       characters: [],
@@ -64,7 +96,9 @@ export default {
       menuPosition: {
         top: '0px',
         left: '0px'
-      }
+      },
+      batchSelectMode: false,
+      selectedCharacters: []
     }
   },
   mounted() {
@@ -73,6 +107,12 @@ export default {
   },
   beforeUnmount() {
     document.removeEventListener('click', this.closeMenu)
+  },
+  computed: {
+    isAllSelected() {
+      return this.characters.length > 0 && 
+             this.selectedCharacters.length === this.characters.length
+    }
   },
   methods: {
     getInitials(name) {
@@ -108,6 +148,10 @@ export default {
       }
     },
     handleItemClick(character, event) {
+      if (this.batchSelectMode) {
+        this.toggleSelect(character)
+        return
+      }
       event.stopPropagation()
       
       // 如果点击的是同一个角色，则关闭菜单
@@ -120,7 +164,7 @@ export default {
       const listItem = event.currentTarget
       const rect = listItem.getBoundingClientRect()
       
-      // 设置菜单位置
+      // 设菜单位置
       this.menuPosition = {
         top: `${rect.top}px`,
         left: `${rect.right + 10}px` // 在列表项右侧10px处
@@ -140,6 +184,92 @@ export default {
 
     getActiveCharacter() {
       return this.characters.find(c => c.id === this.activeCharacter)
+    },
+
+    getTypeBadgeText(type) {
+      switch (type) {
+        case 'question':
+          return 'Q'
+        case 'replay':
+          return 'A'
+        case 'content_creator':
+          return 'C'
+        default:
+          return 'A'
+      }
+    },
+
+    handleCopy(character) {
+      // 创建一个新的角色对象，移除 id 属性
+      const copiedCharacter = {
+        ...character,
+        name: `${character.name} (Copy)`, // 在名称后添加 (Copy) 标识
+        id: undefined // 移除 id，这样会被视为新角色
+      }
+      
+      // 触发显示编辑弹窗事件，传递复制的角色数据
+      this.$emit('show-dialog', copiedCharacter)
+      this.closeMenu()
+    },
+
+    enterBatchSelectMode() {
+      this.batchSelectMode = true
+      this.selectedCharacters = []
+    },
+
+    toggleSelectAll(event) {
+      if (event.target.checked) {
+        this.selectedCharacters = this.characters.map(char => char.id)
+      } else {
+        this.selectedCharacters = []
+      }
+    },
+
+    toggleSelect(character) {
+      const index = this.selectedCharacters.indexOf(character.id)
+      if (index === -1) {
+        this.selectedCharacters.push(character.id)
+      } else {
+        this.selectedCharacters.splice(index, 1)
+      }
+    },
+
+    async confirmBatchAdd() {
+      if (this.selectedCharacters.length === 0) {
+        alert('请至少选择一个角色')
+        return
+      }
+
+      try {
+        const response = await fetch(
+          API_ROUTES.ADD_AI_TO_SESSION(this.currentSessionId),
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              aiProfileIds: this.selectedCharacters
+            })
+          }
+        )
+
+        const data = await response.json()
+        if (data.code === 200) {
+          this.$parent.showToast('已添加所选角色到聊天')
+          this.$parent.$refs.chatArea.fetchChatSession()
+          this.cancelBatchSelect()
+        } else {
+          throw new Error(data.message || '添加失败')
+        }
+      } catch (error) {
+        this.$parent.showToast(error.message || '添加失败', 'error')
+      }
+    },
+
+    cancelBatchSelect() {
+      this.batchSelectMode = false
+      this.selectedCharacters = []
     }
   },
   created() {
@@ -150,7 +280,7 @@ export default {
 
 <style scoped>
 .sidebar {
-  width: 250px;
+  width: 290px;
   background-color: #ffffff;
   height: 100vh; /* 设置整体高度 */
   display: flex;
@@ -268,6 +398,10 @@ export default {
 
 .ai-type-badge.replay {
   background-color: #28a745;
+}
+
+.ai-type-badge.content_creator {
+  background-color: #fd7e14;
 }
 
 .actions {
@@ -439,6 +573,11 @@ export default {
   color: #28a745;
 }
 
+.menu-btn.copy:hover {
+  background-color: #e3f2fd;
+  color: #0056b3;
+}
+
 .list-item {
   position: relative;
   cursor: pointer;
@@ -463,5 +602,62 @@ export default {
   .floating-menu::before {
     display: none;
   }
+
+  .menu-btn {
+    padding: 10px 12px; /* 在移动端增加按钮的可点击区域 */
+  }
+}
+
+.batch-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-button,
+.cancel-button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.confirm-button {
+  background: #007bff;
+  color: white;
+}
+
+.cancel-button {
+  background: #6c757d;
+  color: white;
+}
+
+.batch-select-checkbox {
+  margin-right: 10px;
+}
+
+.list-item.batch-select-mode {
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+
+.batch-select-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 </style> 

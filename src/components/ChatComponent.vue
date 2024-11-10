@@ -17,6 +17,12 @@
       @close="handleCloseDialog"
       @save="handleSaveCharacter"
     />
+
+    <Toast 
+      :visible="toast.show"
+      :message="toast.message"
+      :type="toast.type"
+    />
   </div>
 </template>
 
@@ -25,6 +31,7 @@ import CharactersList from './CharactersList.vue'
 import ChatArea from './ChatArea.vue'
 import HistorySidebar from './HistorySidebar.vue'
 import EditCharacterDialog from './EditCharacterDialog.vue'
+import Toast from './Toast.vue'
 import { API_ROUTES } from '../config/api'
 
 export default {
@@ -33,13 +40,20 @@ export default {
     CharactersList,
     ChatArea,
     HistorySidebar,
-    EditCharacterDialog
+    EditCharacterDialog,
+    Toast
   },
   data() {
     return {
       currentSessionId: 1,
       showDialog: false,
-      selectedCharacter: null
+      selectedCharacter: null,
+      toast: {
+        show: false,
+        message: '',
+        type: 'success',
+        timer: null
+      }
     }
   },
   methods: {
@@ -50,22 +64,43 @@ export default {
       this.currentSessionId = sessionId
       this.$refs.chatArea.fetchChatSession()
     },
+    showToast(message, type = 'success') {
+      if (this.toast.timer) {
+        clearTimeout(this.toast.timer)
+      }
+
+      this.toast.show = true
+      this.toast.message = message
+      this.toast.type = type
+
+      this.toast.timer = setTimeout(() => {
+        this.toast.show = false
+      }, 2000)
+    },
     async handleAddToChat(character) {
       try {
         const response = await fetch(
-          API_ROUTES.ADD_AI_TO_SESSION(this.currentSessionId, character.id), 
-          { method: 'POST' }
+          API_ROUTES.ADD_AI_TO_SESSION(this.currentSessionId), 
+          { 
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              aiProfileIds: [character.id]
+            })
+          }
         )
         const data = await response.json()
         
         if (data.code === 200) {
-          alert('已添加此角色到聊天')
+          this.showToast('已添加此角色到聊天')
           this.$refs.chatArea.fetchChatSession()
         } else {
           throw new Error(data.message || '添加失败')
         }
       } catch (error) {
-        alert('添加失败: ' + error.message)
+        this.showToast(error.message || '添加失败', 'error')
       }
     },
     handleShowDialog(character) {

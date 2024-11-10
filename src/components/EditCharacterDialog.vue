@@ -18,6 +18,7 @@
           <select v-model="form.businessType" required class="input-field">
             <option value="question">提问者（擅长提问）</option>
             <option value="replay">回答者（擅长回答）</option>
+            <option value="content_creator">内容创作者</option>
           </select>
         </div>
 
